@@ -3,9 +3,11 @@ build/
 dist/
 *.egg-info/
 
+.env
 .env/
 .venv/
 env/
 venv/
 
 tags
+*~

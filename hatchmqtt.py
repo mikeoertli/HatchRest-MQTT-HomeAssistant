@@ -6,16 +6,22 @@ import hatchrestbluepy
 from hatchrestbluepy.constants import HatchRestSound
 from typing import List, Dict
 import time
+import logging
 
+MQTT_CONFIG = "/app/mqtt.ini"
+JSON_LOC = "/app"
 
-MQTT_CONFIG = "/opt/HatchMQTT/mqtt.ini"
-JSON_LOC = "/opt/HatchMQTT"
-
+fh = logging.FileHandler('app.log')
+logger = logging.getLogger()
+fh.setLevel(logging.INFO)
+# logging.basicConfig(format='%(asctime)s %(user)-8s %(message)s')
+logger.addHandler(fh)
 
 class HatchMQTT:
     def __init__(self, addr: str, topics: List):
         self.device = hatchrestbluepy.HatchRest(addr=addr)
         self._parse_topics(topics)
+        self.logger.debug("Parsing topics... " + str(topics))
 
     def _parse_topics(self, topics: List) -> None:
         self.configs = {'light': topics['light_config'],
@@ -124,8 +130,19 @@ def on_message(client: mqtt.Client, userdata: HatchMQTT, msg: mqtt.MQTTMessage) 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', default=MQTT_CONFIG, help="configuration file")
+parser.add_argument('-u', '--username', dest='username', default='homeassistant', help="username for secure MQTT connections")
+parser.add_argument('-p', '--password', dest='password', help="password for secure MQTT connections, not set by default (indicate no client credentials are used).")
 parser.add_argument('-v', '--verbose', action='store_true', help="verbose messages")
+parser.add_argument('-d', '--debug', action='store_true', help="enable debug logging")
 args = parser.parse_args()
+
+if args.debug or args.verbose:
+    fh.setLevel(logging.DEBUG)
+
+use_creds = args.password is not None
+if use_creds:
+    mqtt_user = args.username
+    mqtt_pw = args.password
 
 conf = configparser.ConfigParser()
 conf.read(args.config)
@@ -133,29 +150,51 @@ conf.read(args.config)
 host = conf.get('mqtt', 'host')
 port = int(conf.get('mqtt', 'port'))
 
+device_addr = conf.get('device', 'addr')
+
 tries = 0
 while tries < 5:
     try:
+        logger.debug("Creating HatchMQTT... device: " + str(conf['device']['addr']))
         hatch = HatchMQTT(conf['device']['addr'], conf['hass'])
         break
-    except Exception:
+    except Exception as e:
         tries = tries + 1
-        time.sleep(0.5)
+        logger.warning("Failure #" + str(tries))
+        if tries == 5:
+            logger.error("Failed to create the HatchMQTT client!")
+            print(e)
+        else:
+            time.sleep(0.5)
+
 if tries == 5:
     exit(1)
 
+print("Beginning MQTT client configuration...")
 client = mqtt.Client(userdata=hatch)
 client.enable_logger()
 client.on_connect = on_connect
 client.on_message = on_message
 
+if use_creds:
+    logger.info("MQTT client connecting with supplied password for user: " + mqtt_user)
+    print("MQTT client connecting with supplied password for user: " + mqtt_user)
+    client.username_pw_set(mqtt_user, mqtt_pw)
+else:
+    logger.info("MQTT client connecting with supplied password for user: " + mqtt_user)
+    print("MQTT client connecting without credentials")
+
 client.connect(host, port, 60)
+
+logger.info("MQTT client has CONNECTED")
 
 client.loop_start()
 try:
     while True:
         ha_update_states(client, hatch)
         time.sleep(2)
+        logger.debug("MQTT client is CONNECTED")
+
 except KeyboardInterrupt:
     hatch.device.disconnect()
     exit(0)

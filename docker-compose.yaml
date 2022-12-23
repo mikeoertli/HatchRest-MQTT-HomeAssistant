@@ -1,0 +1,24 @@
+version: '3'
+services:
+  hatch-mqtt:
+    container_name: hatch_mqtt
+    # Container runtime env vars
+    env_file: .env
+    image: mikeoertli/hatch-mqtt-bridge:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - HATCH_BTLE_MAC=${HATCH_BTLE_MAC:-'00:00:00:00:00:00'}
+        - MQTT_HOST=${MQTT_HOST:-localhost}
+        - MQTT_PORT=${MQTT_PORT:-1883}
+        
+        - ENV_HATCH_NAME=${ENV_HATCH_NAME:-hatch1}
+        - ENV_MQTT_USERNAME=myuser
+        - ENV_MQTT_PASSWORD=password
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      # Share host's Bluetooth (note: may be /dev/run/dbus on your host!)
+      # Source: https://www.youtube.com/watch?v=ZXvcdI3mQuA
+      - /run/dbus:/run/dbus:ro
+    network_mode: host
