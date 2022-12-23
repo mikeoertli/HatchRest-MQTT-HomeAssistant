@@ -1,6 +1,9 @@
 [mqtt]
+client_id=TEMPLATE_MQTT_CLIENT_ID
 host=TEMPLATE_MQTT_HOST
 port=TEMPLATE_MQTT_PORT
+username=TEMPLATE_MQTT_USERNAME
+password=TEMPLATE_MQTT_PASSWORD
 
 [hass]
 switch_cmd=homeassistant/switch/hatch-power/set

@@ -81,10 +81,8 @@ This is only intended to work on a Linux host. The underlying Hatch Bluetooth li
 
     ```shell
     python3 hatchmqtt.py \
-      --debug \
-      --config ${MQTT_INI} \
-      --user=${ENV_MQTT_USERNAME} \
-      --password=${ENV_MQTT_PASSWORD}
+      --verbose \
+      --config ${MQTT_INI}
     ```
 
 ## Credits

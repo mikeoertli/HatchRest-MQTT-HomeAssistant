@@ -6,6 +6,7 @@ import hatchrestbluepy
 from hatchrestbluepy.constants import HatchRestSound
 from typing import List, Dict
 import time
+import os.path
 import logging
 
 MQTT_CONFIG = "/app/mqtt.ini"
@@ -109,7 +110,15 @@ def on_connect(client: mqtt.Client, userdata: HatchMQTT, flags, rc) -> None:
 
 
 def on_message(client: mqtt.Client, userdata: HatchMQTT, msg: mqtt.MQTTMessage) -> None:
-    if userdata.device.power:
+    if msg.topic == userdata.cmds['switch']:
+        if msg.payload == b'ON':
+            if not userdata.device.connected:
+                userdata.device.connect()
+            userdata.device.power_on()
+        else:
+            userdata.device.power_off()
+            userdata.device.disconnect()
+    elif userdata.device.power:
         if msg.topic == userdata.cmds['light']:
             userdata.set_light(msg.payload)
         elif msg.topic == userdata.cmds['sound']:
@@ -119,40 +128,36 @@ def on_message(client: mqtt.Client, userdata: HatchMQTT, msg: mqtt.MQTTMessage) 
                 userdata.device.set_sound(HatchRestSound.none)
         elif msg.topic == userdata.cmds['sound_vol']:
             userdata.device.set_volume(int((int(msg.payload)/100)*255))
-    if msg.topic == userdata.cmds['switch']:
-        if msg.payload == b'ON':
-            userdata.device.power_on()
-        else:
-            userdata.device.power_off()
-    userdata.device._refresh_data()
+    if userdata.device.connected:
+        userdata.device._refresh_data()
     ha_update_states(client, userdata)
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', default=MQTT_CONFIG, help="configuration file")
-parser.add_argument('-u', '--username', dest='username', default='homeassistant', help="username for secure MQTT connections")
-parser.add_argument('-p', '--password', dest='password', help="password for secure MQTT connections, not set by default (indicate no client credentials are used).")
-parser.add_argument('-v', '--verbose', action='store_true', help="verbose messages")
-parser.add_argument('-d', '--debug', action='store_true', help="enable debug logging")
+parser.add_argument('-v', '--verbose', action='store_true', help="verbose messages/debug logging")
 args = parser.parse_args()
 
-if args.debug or args.verbose:
+if args.verbose:
     fh.setLevel(logging.DEBUG)
 
-use_creds = args.password is not None
-if use_creds:
-    mqtt_user = args.username
-    mqtt_pw = args.password
-
 conf = configparser.ConfigParser()
+
+if not os.path.exists(args.config):
+    raise FileNotFoundError(f'Config file: "{args.config}" does not exist')
+
 conf.read(args.config)
 
+client_id = conf.get('mqtt', 'client_id')
 host = conf.get('mqtt', 'host')
 port = int(conf.get('mqtt', 'port'))
+username = conf.get('mqtt', 'username')
+password = conf.get('mqtt', 'password')
 
 device_addr = conf.get('device', 'addr')
 
 tries = 0
+hatch = None
 while tries < 5:
     try:
         logger.debug("Creating HatchMQTT... device: " + str(conf['device']['addr']))
@@ -171,17 +176,17 @@ if tries == 5:
     exit(1)
 
 print("Beginning MQTT client configuration...")
-client = mqtt.Client(userdata=hatch)
+client = mqtt.Client(client_id=client_id, userdata=hatch)
 client.enable_logger()
 client.on_connect = on_connect
 client.on_message = on_message
 
 if use_creds:
-    logger.info("MQTT client connecting with supplied password for user: " + mqtt_user)
-    print("MQTT client connecting with supplied password for user: " + mqtt_user)
-    client.username_pw_set(mqtt_user, mqtt_pw)
+    logger.info("MQTT client connecting with supplied password for user: " + username)
+    print("MQTT client connecting with supplied password for user: " + username)
+    client.username_pw_set(username, password)
 else:
-    logger.info("MQTT client connecting with supplied password for user: " + mqtt_user)
+    logger.info("MQTT client connecting without credentials")
     print("MQTT client connecting without credentials")
 
 client.connect(host, port, 60)

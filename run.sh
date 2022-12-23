@@ -9,5 +9,5 @@ service bluetooth start
 ./generate-mqtt-ini.sh
 
 # Run the Hatch MQTT bridge client
-echo "Launching python3 hatchmqtt.py --debug --config ${MQTT_INI} --user=${ENV_MQTT_USERNAME} --password=[REDACTED]"
-python3 hatchmqtt.py --debug --config ${MQTT_INI} --user=${ENV_MQTT_USERNAME} --password=${ENV_MQTT_PASSWORD}
+echo "Launching python3 hatchmqtt.py --verbose --config ${MQTT_INI}"
+python3 hatchmqtt.py --verbose --config ${MQTT_INI}
